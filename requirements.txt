@@ -1,0 +1,11 @@
+# Cisco Router Simulator Requirements
+# This project uses only Python standard library
+# No external dependencies required
+
+# Python 3.6+ is required
+# Built-in modules used:
+# - readline (for command history)
+# - shlex (for command parsing)
+# - argparse (for CLI arguments)
+# - time (for uptime tracking)
+# - datetime (for timestamps)
