@@ -3,6 +3,7 @@ Cisco Router Simulator - CLI Interface
 Implements the command-line interface with IOS-like behavior.
 """
 
+import sys
 import readline
 import shlex
 from typing import Optional, List, Tuple
@@ -405,12 +406,17 @@ class CLIInterface:
                 output = self.execute_command(user_input)
                 if output:
                     print(output)
+                    sys.stdout.flush()
 
             except KeyboardInterrupt:
                 print("\n")
+                sys.stdout.flush()
                 continue
             except EOFError:
                 print("\nGoodbye!")
+                sys.stdout.flush()
                 break
             except Exception as e:
                 print(f"% Error: {str(e)}")
+                sys.stdout.flush()
+                continue
