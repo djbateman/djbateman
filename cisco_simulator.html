@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cisco Router Simulator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #000;
+            color: #0f0;
+            padding: 20px;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .banner {
+            border: 2px solid #0f0;
+            padding: 10px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .banner h1 {
+            font-size: 20px;
+            margin-bottom: 5px;
+        }
+
+        .banner p {
+            font-size: 14px;
+        }
+
+        .terminal {
+            flex: 1;
+            background-color: #001;
+            border: 2px solid #0f0;
+            padding: 15px;
+            overflow-y: auto;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .output-line {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .input-line {
+            display: flex;
+            align-items: baseline;
+        }
+
+        .prompt {
+            color: #0ff;
+            margin-right: 5px;
+            flex-shrink: 0;
+        }
+
+        #command-input {
+            background: transparent;
+            border: none;
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            outline: none;
+            flex: 1;
+            caret-color: #0f0;
+        }
+
+        .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background-color: #0f0;
+            animation: blink 1s infinite;
+            vertical-align: text-bottom;
+        }
+
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        /* Custom scrollbar */
+        .terminal::-webkit-scrollbar {
+            width: 10px;
+        }
+
+        .terminal::-webkit-scrollbar-track {
+            background: #001;
+        }
+
+        .terminal::-webkit-scrollbar-thumb {
+            background: #0f0;
+            border-radius: 5px;
+        }
+
+        .terminal::-webkit-scrollbar-thumb:hover {
+            background: #0ff;
+        }
+
+        .info {
+            color: #888;
+            font-size: 12px;
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="banner">
+            <h1>CISCO ROUTER SIMULATOR</h1>
+            <p>Simulating Cisco IOS - Web Version</p>
+        </div>
+        <div id="terminal" class="terminal">
+            <div class="output-line"></div>
+        </div>
+        <div class="info">
+            Use arrow keys for command history | Type "?" for help | Ctrl+L to clear screen
+        </div>
+    </div>
+
+    <script>
+        // Mode Constants
+        const Mode = {
+            USER_EXEC: 'user',
+            PRIVILEGED_EXEC: 'privileged',
+            GLOBAL_CONFIG: 'global_config',
+            INTERFACE_CONFIG: 'interface_config'
+        };
+
+        // Cisco Router Class
+        class CiscoRouter {
+            constructor(hostname = 'Router') {
+                this.hostname = hostname;
+                this.runningConfig = this._defaultConfig();
+                this.startupConfig = this._defaultConfig();
+                this.interfaces = this._initializeInterfaces();
+                this.routingTable = [];
+                this.enablePassword = 'cisco';
+                this.enableSecret = null;
+                this.uptime = Date.now();
+                this.iosVersion = '15.1(4)M10';
+                this.model = 'CISCO2911/K9';
+            }
+
+            _defaultConfig() {
+                return {
+                    hostname: this.hostname,
+                    enable_password: null,
+                    enable_secret: null,
+                    interfaces: {},
+                    routes: [],
+                    banner: null,
+                    line_vty: { password: null, login: false },
+                    line_console: { password: null, login: false }
+                };
+            }
+
+            _initializeInterfaces() {
+                return {
+                    'GigabitEthernet0/0': {
+                        status: 'administratively down',
+                        protocol: 'down',
+                        ip_address: null,
+                        subnet_mask: null,
+                        description: null,
+                        mac_address: '0000.0c00.0001'
+                    },
+                    'GigabitEthernet0/1': {
+                        status: 'administratively down',
+                        protocol: 'down',
+                        ip_address: null,
+                        subnet_mask: null,
+                        description: null,
+                        mac_address: '0000.0c00.0002'
+                    },
+                    'Serial0/0/0': {
+                        status: 'administratively down',
+                        protocol: 'down',
+                        ip_address: null,
+                        subnet_mask: null,
+                        description: null,
+                        clock_rate: null
+                    }
+                };
+            }
+
+            getUptime() {
+                const elapsed = Math.floor((Date.now() - this.uptime) / 1000);
+                const days = Math.floor(elapsed / 86400);
+                const hours = Math.floor((elapsed % 86400) / 3600);
+                const minutes = Math.floor((elapsed % 3600) / 60);
+
+                if (days > 0) {
+                    return `${days} days, ${hours} hours, ${minutes} minutes`;
+                } else if (hours > 0) {
+                    return `${hours} hours, ${minutes} minutes`;
+                } else {
+                    return `${minutes} minutes`;
+                }
+            }
+
+            setHostname(hostname) {
+                this.hostname = hostname;
+                this.runningConfig.hostname = hostname;
+            }
+
+            setEnablePassword(password, secret = false) {
+                if (secret) {
+                    this.enableSecret = password;
+                    this.runningConfig.enable_secret = password;
+                } else {
+                    this.enablePassword = password;
+                    this.runningConfig.enable_password = password;
+                }
+            }
+
+            verifyEnablePassword(password) {
+                if (this.enableSecret) {
+                    return password === this.enableSecret;
+                }
+                return password === this.enablePassword;
+            }
+
+            configureInterface(interfaceName, options) {
+                if (!(interfaceName in this.interfaces)) {
+                    throw new Error(`Interface ${interfaceName} does not exist`);
+                }
+
+                Object.assign(this.interfaces[interfaceName], options);
+                this.runningConfig.interfaces[interfaceName] = { ...this.interfaces[interfaceName] };
+            }
+
+            shutdownInterface(interfaceName) {
+                if (interfaceName in this.interfaces) {
+                    this.interfaces[interfaceName].status = 'administratively down';
+                    this.interfaces[interfaceName].protocol = 'down';
+                }
+            }
+
+            noShutdownInterface(interfaceName) {
+                if (interfaceName in this.interfaces) {
+                    this.interfaces[interfaceName].status = 'up';
+                    this.interfaces[interfaceName].protocol = 'up';
+                }
+            }
+
+            saveConfig() {
+                this.startupConfig = JSON.parse(JSON.stringify(this.runningConfig));
+                return true;
+            }
+
+            getRunningConfig() {
+                let lines = [
+                    'Building configuration...',
+                    '',
+                    'Current configuration : 1234 bytes',
+                    '!',
+                    `version ${this.iosVersion}`,
+                    '!',
+                    `hostname ${this.runningConfig.hostname}`,
+                    '!'
+                ];
+
+                if (this.runningConfig.enable_secret) {
+                    lines.push(`enable secret 5 ${this.runningConfig.enable_secret}`);
+                } else if (this.runningConfig.enable_password) {
+                    lines.push(`enable password ${this.runningConfig.enable_password}`);
+                }
+
+                lines.push('!');
+
+                for (const [ifaceName, ifaceConfig] of Object.entries(this.runningConfig.interfaces)) {
+                    lines.push(`interface ${ifaceName}`);
+                    if (ifaceConfig.description) {
+                        lines.push(` description ${ifaceConfig.description}`);
+                    }
+                    if (ifaceConfig.ip_address && ifaceConfig.subnet_mask) {
+                        lines.push(` ip address ${ifaceConfig.ip_address} ${ifaceConfig.subnet_mask}`);
+                    }
+                    if (ifaceConfig.status === 'administratively down') {
+                        lines.push(' shutdown');
+                    }
+                    lines.push('!');
+                }
+
+                lines.push('line con 0');
+                lines.push('line vty 0 4');
+                lines.push(' login');
+                lines.push('!');
+                lines.push('end');
+
+                return lines.join('\n');
+            }
+        }
+
+        // Command Handler Class
+        class CommandHandler {
+            constructor(router) {
+                this.router = router;
+            }
+
+            showVersion() {
+                const uptime = this.router.getUptime();
+                return `Cisco IOS Software, C2900 Software (C2900-UNIVERSALK9-M), Version ${this.router.iosVersion}, RELEASE SOFTWARE (fc2)
+Technical Support: http://www.cisco.com/techsupport
+Copyright (c) 1986-2015 by Cisco Systems, Inc.
+Compiled Wed 11-Feb-15 15:18 by prod_rel_team
+
+ROM: System Bootstrap, Version 15.0(1r)M16, RELEASE SOFTWARE (fc1)
+
+${this.router.hostname} uptime is ${uptime}
+System returned to ROM by power-on
+System image file is "flash:c2900-universalk9-mz.SPA.151-4.M10.bin"
+
+
+This product contains cryptographic features and is subject to United
+States and local country laws governing import, export, transfer and
+use. Delivery of Cisco cryptographic products does not imply
+third-party authority to import, export, distribute or use encryption.
+Importers, exporters, distributors and users are responsible for
+compliance with U.S. and local country laws. By using this product you
+agree to comply with applicable laws and regulations. If you are unable
+to comply with U.S. and local laws, return this product immediately.
+
+Cisco ${this.router.model} (revision 1.0) with 491520K/32768K bytes of memory.
+Processor board ID FTX1628835J
+3 Gigabit Ethernet interfaces
+1 Serial(sync/async) interface
+DRAM configuration is 64 bits wide with parity disabled.
+255K bytes of non-volatile configuration memory.
+250880K bytes of ATA System CompactFlash 0 (Read/Write)
+
+
+License Info:
+
+License UDI:
+
+-------------------------------------------------
+Device#   PID                   SN
+-------------------------------------------------
+*0        ${this.router.model}          FTX1628835J
+
+
+
+Technology Package License Information for Module:'c2900'
+
+-----------------------------------------------------------------
+Technology    Technology-package           Technology-package
+              Current       Type           Next reboot
+------------------------------------------------------------------
+ipbase        ipbasek9      Permanent      ipbasek9
+security      None          None           None
+uc            None          None           None
+data          None          None           None
+
+Configuration register is 0x2102`;
+            }
+
+            showRunningConfig() {
+                return this.router.getRunningConfig();
+            }
+
+            showStartupConfig() {
+                if (!this.router.startupConfig) {
+                    return 'startup-config is not present';
+                }
+                return 'Startup configuration:\n' + this.router.getRunningConfig();
+            }
+
+            showIpInterfaceBrief() {
+                let lines = ['Interface              IP-Address      OK? Method Status                Protocol'];
+
+                for (const [ifaceName, ifaceConfig] of Object.entries(this.router.interfaces)) {
+                    const ipAddr = ifaceConfig.ip_address || 'unassigned';
+                    const status = ifaceConfig.status;
+                    const protocol = ifaceConfig.protocol;
+
+                    const line = `${ifaceName.padEnd(23)}${ipAddr.padEnd(16)}YES manual  ${status.padEnd(22)}${protocol}`;
+                    lines.push(line);
+                }
+
+                return lines.join('\n');
+            }
+
+            showInterfaces(interfaceName = null) {
+                let lines = [];
+                const interfacesToShow = interfaceName ? [interfaceName] : Object.keys(this.router.interfaces);
+
+                for (const ifaceName of interfacesToShow) {
+                    if (!(ifaceName in this.router.interfaces)) {
+                        return "              ^\n% Invalid input detected at '^' marker.";
+                    }
+
+                    const iface = this.router.interfaces[ifaceName];
+                    lines.push(`${ifaceName} is ${iface.status}, line protocol is ${iface.protocol}`);
+
+                    if (iface.description) {
+                        lines.push(`  Description: ${iface.description}`);
+                    }
+
+                    if (iface.mac_address) {
+                        lines.push(`  Hardware is ${ifaceName.split('/')[0]}, address is ${iface.mac_address} (bia ${iface.mac_address})`);
+                    }
+
+                    if (iface.ip_address) {
+                        lines.push(`  Internet address is ${iface.ip_address}/${iface.subnet_mask || '255.255.255.0'}`);
+                    }
+
+                    lines.push('  MTU 1500 bytes, BW 1000000 Kbit/sec, DLY 10 usec,');
+                    lines.push('     reliability 255/255, txload 1/255, rxload 1/255');
+                    lines.push('  Encapsulation ARPA, loopback not set');
+                    lines.push('  Last input never, output never, output hang never');
+                    lines.push('  Last clearing of "show interface" counters never');
+                    lines.push('  Input queue: 0/75/0/0 (size/max/drops/flushes); Total output drops: 0');
+                    lines.push('  Queueing strategy: fifo');
+                    lines.push('  Output queue: 0/40 (size/max)');
+                    lines.push('  5 minute input rate 0 bits/sec, 0 packets/sec');
+                    lines.push('  5 minute output rate 0 bits/sec, 0 packets/sec');
+                    lines.push('     0 packets input, 0 bytes, 0 no buffer');
+                    lines.push('     Received 0 broadcasts (0 IP multicasts)');
+                    lines.push('     0 runts, 0 giants, 0 throttles');
+                    lines.push('     0 input errors, 0 CRC, 0 frame, 0 overrun, 0 ignored');
+                    lines.push('     0 watchdog, 0 multicast, 0 pause input');
+                    lines.push('     0 packets output, 0 bytes, 0 underruns');
+                    lines.push('     0 output errors, 0 collisions, 0 interface resets');
+                    lines.push('     0 unknown protocol drops');
+                    lines.push('     0 babbles, 0 late collision, 0 deferred');
+                    lines.push('     0 lost carrier, 0 no carrier, 0 pause output');
+                    lines.push('     0 output buffer failures, 0 output buffers swapped out');
+                    lines.push('');
+                }
+
+                return lines.join('\n');
+            }
+
+            showIpRoute() {
+                let lines = [
+                    'Codes: L - local, C - connected, S - static, R - RIP, M - mobile, B - BGP',
+                    '       D - EIGRP, EX - EIGRP external, O - OSPF, IA - OSPF inter area',
+                    '       N1 - OSPF NSSA external type 1, N2 - OSPF NSSA external type 2',
+                    '       E1 - OSPF external type 1, E2 - OSPF external type 2',
+                    '       i - IS-IS, su - IS-IS summary, L1 - IS-IS level-1, L2 - IS-IS level-2',
+                    '       ia - IS-IS inter area, * - candidate default, U - per-user static route',
+                    '       o - ODR, P - periodic downloaded static route, H - NHRP, l - LISP',
+                    '       + - replicated route, % - next hop override',
+                    '',
+                    'Gateway of last resort is not set',
+                    ''
+                ];
+
+                let hasRoutes = false;
+                for (const [ifaceName, ifaceConfig] of Object.entries(this.router.interfaces)) {
+                    if (ifaceConfig.ip_address && ifaceConfig.status === 'up') {
+                        const ip = ifaceConfig.ip_address;
+                        lines.push(`C    ${ip}/24 is directly connected, ${ifaceName}`);
+                        lines.push(`L    ${ip}/32 is directly connected, ${ifaceName}`);
+                        hasRoutes = true;
+                    }
+                }
+
+                if (!hasRoutes) {
+                    return '% Network not in table';
+                }
+
+                return lines.join('\n');
+            }
+
+            ping(destination) {
+                return `Type escape sequence to abort.
+Sending 5, 100-byte ICMP Echos to ${destination}, timeout is 2 seconds:
+.....
+Success rate is 0 percent (0/5)`;
+            }
+        }
+
+        // CLI Interface Class
+        class CLIInterface {
+            constructor(router) {
+                this.router = router;
+                this.commandHandler = new CommandHandler(router);
+                this.mode = Mode.USER_EXEC;
+                this.currentInterface = null;
+                this.commandHistory = [];
+                this.historyIndex = -1;
+            }
+
+            getPrompt() {
+                const hostname = this.router.hostname;
+
+                switch (this.mode) {
+                    case Mode.USER_EXEC:
+                        return `${hostname}>`;
+                    case Mode.PRIVILEGED_EXEC:
+                        return `${hostname}#`;
+                    case Mode.GLOBAL_CONFIG:
+                        return `${hostname}(config)#`;
+                    case Mode.INTERFACE_CONFIG:
+                        return `${hostname}(config-if)#`;
+                    default:
+                        return `${hostname}>`;
+                }
+            }
+
+            executeCommand(commandLine) {
+                commandLine = commandLine.trim();
+
+                if (!commandLine) {
+                    return null;
+                }
+
+                // Store in history
+                this.commandHistory.push(commandLine);
+                this.historyIndex = this.commandHistory.length;
+
+                const parts = commandLine.split(/\s+/);
+                const cmd = parts[0].toLowerCase();
+
+                try {
+                    // Common commands across all modes
+                    if (cmd === 'exit' || cmd === 'quit') {
+                        return this.handleExit();
+                    } else if (cmd === '?') {
+                        return this.handleHelp();
+                    } else if (cmd === 'end') {
+                        if (this.mode === Mode.GLOBAL_CONFIG || this.mode === Mode.INTERFACE_CONFIG) {
+                            this.mode = Mode.PRIVILEGED_EXEC;
+                            return null;
+                        }
+                        return "% Invalid input detected at '^' marker.";
+                    }
+
+                    // Mode-specific commands
+                    switch (this.mode) {
+                        case Mode.USER_EXEC:
+                            return this.handleUserExec(parts);
+                        case Mode.PRIVILEGED_EXEC:
+                            return this.handlePrivilegedExec(parts);
+                        case Mode.GLOBAL_CONFIG:
+                            return this.handleGlobalConfig(parts);
+                        case Mode.INTERFACE_CONFIG:
+                            return this.handleInterfaceConfig(parts);
+                    }
+                } catch (e) {
+                    return `% Error: ${e.message}`;
+                }
+
+                return null;
+            }
+
+            handleUserExec(parts) {
+                const cmd = parts[0].toLowerCase();
+
+                if (cmd === 'enable') {
+                    this.mode = Mode.PRIVILEGED_EXEC;
+                    return null;
+                } else if (cmd === 'show') {
+                    return this.handleShowCommand(parts.slice(1));
+                } else if (cmd === 'ping') {
+                    if (parts.length < 2) {
+                        return '% Incomplete command.';
+                    }
+                    return this.commandHandler.ping(parts[1]);
+                } else {
+                    return `% Invalid input detected at '${cmd}' marker.`;
+                }
+            }
+
+            handlePrivilegedExec(parts) {
+                const cmd = parts[0].toLowerCase();
+
+                if (cmd === 'disable') {
+                    this.mode = Mode.USER_EXEC;
+                    return null;
+                } else if (cmd === 'configure') {
+                    if (parts.length > 1 && parts[1].toLowerCase() === 'terminal') {
+                        this.mode = Mode.GLOBAL_CONFIG;
+                        return 'Enter configuration commands, one per line. End with CNTL/Z.';
+                    }
+                    return '% Incomplete command.';
+                } else if (cmd === 'show') {
+                    return this.handleShowCommand(parts.slice(1));
+                } else if (cmd === 'write' || (cmd === 'copy' && parts.length > 2 &&
+                           parts[1] === 'running-config' && parts[2] === 'startup-config')) {
+                    if (this.router.saveConfig()) {
+                        return 'Building configuration...\n[OK]';
+                    }
+                    return '% Failed to save configuration';
+                } else if (cmd === 'reload') {
+                    return 'Proceed with reload? [confirm]';
+                } else if (cmd === 'ping') {
+                    if (parts.length < 2) {
+                        return '% Incomplete command.';
+                    }
+                    return this.commandHandler.ping(parts[1]);
+                } else {
+                    return `% Invalid input detected at '${cmd}' marker.`;
+                }
+            }
+
+            handleGlobalConfig(parts) {
+                const cmd = parts[0].toLowerCase();
+
+                if (cmd === 'hostname') {
+                    if (parts.length < 2) {
+                        return '% Incomplete command.';
+                    }
+                    this.router.setHostname(parts[1]);
+                    return null;
+                } else if (cmd === 'enable') {
+                    if (parts.length < 2) {
+                        return '% Incomplete command.';
+                    }
+
+                    if (parts[1].toLowerCase() === 'password') {
+                        if (parts.length < 3) {
+                            return '% Incomplete command.';
+                        }
+                        this.router.setEnablePassword(parts[2], false);
+                        return null;
+                    } else if (parts[1].toLowerCase() === 'secret') {
+                        if (parts.length < 3) {
+                            return '% Incomplete command.';
+                        }
+                        this.router.setEnablePassword(parts[2], true);
+                        return null;
+                    }
+                } else if (cmd === 'interface') {
+                    if (parts.length < 2) {
+                        return '% Incomplete command.';
+                    }
+
+                    let interfaceName = parts[1];
+                    interfaceName = this.normalizeInterfaceName(interfaceName);
+
+                    if (interfaceName in this.router.interfaces) {
+                        this.mode = Mode.INTERFACE_CONFIG;
+                        this.currentInterface = interfaceName;
+                        return null;
+                    } else {
+                        return '% Invalid interface type and number';
+                    }
+                } else if (cmd === 'no') {
+                    if (parts.length < 2) {
+                        return '% Incomplete command.';
+                    }
+                    return `Removed configuration for ${parts.slice(1).join(' ')}`;
+                } else {
+                    return `% Invalid input detected at '${cmd}' marker.`;
+                }
+            }
+
+            handleInterfaceConfig(parts) {
+                const cmd = parts[0].toLowerCase();
+
+                if (cmd === 'ip') {
+                    if (parts.length < 2) {
+                        return '% Incomplete command.';
+                    }
+
+                    if (parts[1].toLowerCase() === 'address') {
+                        if (parts.length < 4) {
+                            return '% Incomplete command.';
+                        }
+
+                        const ipAddress = parts[2];
+                        const subnetMask = parts[3];
+
+                        this.router.configureInterface(this.currentInterface, {
+                            ip_address: ipAddress,
+                            subnet_mask: subnetMask
+                        });
+                        return null;
+                    }
+                } else if (cmd === 'description') {
+                    if (parts.length < 2) {
+                        return '% Incomplete command.';
+                    }
+
+                    const description = parts.slice(1).join(' ');
+                    this.router.configureInterface(this.currentInterface, { description });
+                    return null;
+                } else if (cmd === 'shutdown') {
+                    this.router.shutdownInterface(this.currentInterface);
+                    return null;
+                } else if (cmd === 'no') {
+                    if (parts.length >= 2 && parts[1].toLowerCase() === 'shutdown') {
+                        this.router.noShutdownInterface(this.currentInterface);
+                        return null;
+                    }
+                    return '% Incomplete command.';
+                } else {
+                    return `% Invalid input detected at '${cmd}' marker.`;
+                }
+            }
+
+            handleShowCommand(args) {
+                if (args.length === 0) {
+                    return '% Incomplete command.';
+                }
+
+                const subcmd = args[0].toLowerCase();
+
+                if (subcmd === 'version') {
+                    return this.commandHandler.showVersion();
+                } else if (subcmd === 'running-config') {
+                    if (this.mode === Mode.USER_EXEC) {
+                        return "% Invalid input detected at '^' marker.";
+                    }
+                    return this.commandHandler.showRunningConfig();
+                } else if (subcmd === 'startup-config') {
+                    if (this.mode === Mode.USER_EXEC) {
+                        return "% Invalid input detected at '^' marker.";
+                    }
+                    return this.commandHandler.showStartupConfig();
+                } else if (subcmd === 'ip') {
+                    if (args.length < 2) {
+                        return '% Incomplete command.';
+                    }
+
+                    if (args[1].toLowerCase() === 'interface') {
+                        if (args.length > 2 && args[2].toLowerCase() === 'brief') {
+                            return this.commandHandler.showIpInterfaceBrief();
+                        }
+                        return '% Incomplete command.';
+                    } else if (args[1].toLowerCase() === 'route') {
+                        return this.commandHandler.showIpRoute();
+                    }
+                } else if (subcmd === 'interfaces' || subcmd === 'interface') {
+                    if (args.length > 1) {
+                        const interfaceName = this.normalizeInterfaceName(args[1]);
+                        return this.commandHandler.showInterfaces(interfaceName);
+                    }
+                    return this.commandHandler.showInterfaces();
+                }
+
+                return `% Invalid input detected at '${subcmd}' marker.`;
+            }
+
+            handleExit() {
+                if (this.mode === Mode.INTERFACE_CONFIG) {
+                    this.mode = Mode.GLOBAL_CONFIG;
+                    this.currentInterface = null;
+                } else if (this.mode === Mode.GLOBAL_CONFIG) {
+                    this.mode = Mode.PRIVILEGED_EXEC;
+                } else if (this.mode === Mode.PRIVILEGED_EXEC) {
+                    this.mode = Mode.USER_EXEC;
+                } else if (this.mode === Mode.USER_EXEC) {
+                    return 'Goodbye!';
+                }
+                return null;
+            }
+
+            handleHelp() {
+                if (this.mode === Mode.USER_EXEC) {
+                    return `Available commands:
+  enable              Enter privileged EXEC mode
+  show                Show running system information
+  ping                Send echo messages
+  exit                Exit from the EXEC
+  ?                   Display this help`;
+                } else if (this.mode === Mode.PRIVILEGED_EXEC) {
+                    return `Available commands:
+  configure terminal  Enter global configuration mode
+  show                Show running system information
+  write               Write running configuration to memory
+  copy running-config startup-config
+  disable             Exit privileged EXEC mode
+  reload              Halt and perform a cold restart
+  ping                Send echo messages
+  exit                Exit from the EXEC
+  ?                   Display this help`;
+                } else if (this.mode === Mode.GLOBAL_CONFIG) {
+                    return `Available commands:
+  hostname            Set system's network name
+  interface           Select an interface to configure
+  enable password     Set enable password
+  enable secret       Set enable secret
+  no                  Negate a command or set its defaults
+  exit                Exit from configuration mode
+  end                 Exit to privileged EXEC mode
+  ?                   Display this help`;
+                } else if (this.mode === Mode.INTERFACE_CONFIG) {
+                    return `Available commands:
+  ip address          Set the IP address of an interface
+  description         Interface specific description
+  shutdown            Shutdown the selected interface
+  no shutdown         Enable the selected interface
+  exit                Exit from interface configuration mode
+  end                 Exit to privileged EXEC mode
+  ?                   Display this help`;
+                }
+
+                return 'Help not available for current mode.';
+            }
+
+            normalizeInterfaceName(name) {
+                name = name.toLowerCase();
+
+                if (name.startsWith('gi') || name.startsWith('gig')) {
+                    return 'GigabitEthernet' + name.substring(name.indexOf('0'));
+                } else if (name.startsWith('fa') || name.startsWith('fast')) {
+                    return 'FastEthernet' + name.substring(name.indexOf('0'));
+                } else if (name.startsWith('se') || name.startsWith('serial')) {
+                    return 'Serial' + name.substring(name.indexOf('0'));
+                } else if (name.startsWith('e') || name.startsWith('eth')) {
+                    return 'Ethernet' + name.substring(name.indexOf('0'));
+                }
+
+                for (const iface of Object.keys(this.router.interfaces)) {
+                    if (name.toLowerCase() === iface.toLowerCase()) {
+                        return iface;
+                    }
+                }
+
+                return name;
+            }
+
+            getPreviousCommand() {
+                if (this.historyIndex > 0) {
+                    this.historyIndex--;
+                    return this.commandHistory[this.historyIndex];
+                }
+                return null;
+            }
+
+            getNextCommand() {
+                if (this.historyIndex < this.commandHistory.length - 1) {
+                    this.historyIndex++;
+                    return this.commandHistory[this.historyIndex];
+                } else {
+                    this.historyIndex = this.commandHistory.length;
+                    return '';
+                }
+            }
+        }
+
+        // Terminal UI
+        class TerminalUI {
+            constructor() {
+                this.terminal = document.getElementById('terminal');
+                this.currentPrompt = null;
+                this.commandInput = null;
+
+                this.router = new CiscoRouter('Router');
+                this.cli = new CLIInterface(this.router);
+
+                this.init();
+            }
+
+            init() {
+                this.writeLine('');
+                this.writeLine('============================================================');
+                this.writeLine('  Cisco Router Simulator - Web Version');
+                this.writeLine('  Simulating Cisco IOS');
+                this.writeLine('============================================================');
+                this.writeLine('');
+                this.createInputLine();
+                this.setupKeyboardHandlers();
+            }
+
+            writeLine(text) {
+                const line = document.createElement('div');
+                line.className = 'output-line';
+                line.textContent = text;
+                this.terminal.appendChild(line);
+                this.scrollToBottom();
+            }
+
+            createInputLine() {
+                const inputLine = document.createElement('div');
+                inputLine.className = 'input-line';
+
+                const prompt = document.createElement('span');
+                prompt.className = 'prompt';
+                prompt.textContent = this.cli.getPrompt() + ' ';
+                this.currentPrompt = prompt;
+
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.id = 'command-input';
+                input.autocomplete = 'off';
+                input.autocapitalize = 'off';
+                input.spellcheck = false;
+                this.commandInput = input;
+
+                inputLine.appendChild(prompt);
+                inputLine.appendChild(input);
+                this.terminal.appendChild(inputLine);
+
+                input.focus();
+                this.scrollToBottom();
+            }
+
+            setupKeyboardHandlers() {
+                this.commandInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        this.handleCommand();
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        const cmd = this.cli.getPreviousCommand();
+                        if (cmd !== null) {
+                            this.commandInput.value = cmd;
+                        }
+                    } else if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        const cmd = this.cli.getNextCommand();
+                        if (cmd !== null) {
+                            this.commandInput.value = cmd;
+                        }
+                    } else if (e.key === 'l' && e.ctrlKey) {
+                        e.preventDefault();
+                        this.clearScreen();
+                    }
+                });
+
+                // Keep focus on input
+                document.addEventListener('click', () => {
+                    this.commandInput.focus();
+                });
+            }
+
+            handleCommand() {
+                const command = this.commandInput.value;
+                const prompt = this.cli.getPrompt();
+
+                // Display the command that was entered
+                this.writeLine(prompt + ' ' + command);
+
+                // Remove the input line
+                const inputLine = this.commandInput.parentElement;
+                inputLine.remove();
+
+                // Execute the command
+                const output = this.cli.executeCommand(command);
+
+                // Display output
+                if (output) {
+                    const lines = output.split('\n');
+                    lines.forEach(line => this.writeLine(line));
+                }
+
+                // Create new input line
+                this.createInputLine();
+            }
+
+            clearScreen() {
+                this.terminal.innerHTML = '';
+                this.createInputLine();
+            }
+
+            scrollToBottom() {
+                this.terminal.scrollTop = this.terminal.scrollHeight;
+            }
+        }
+
+        // Initialize the terminal when the page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            new TerminalUI();
+        });
+    </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 # Cisco Router Simulator
 
-A Python-based Cisco IOS router simulator that provides an interactive command-line interface (CLI) mimicking Cisco router behavior. Perfect for learning Cisco commands, testing network configurations, or practicing for CCNA certification without physical hardware.
+A Cisco IOS router simulator that provides an interactive command-line interface (CLI) mimicking Cisco router behavior. Available in both **Python** (terminal-based) and **Web Browser** versions. Perfect for learning Cisco commands, testing network configurations, or practicing for CCNA certification without physical hardware.
 
 ## Features
 
@@ -31,7 +31,24 @@ cd djbateman
 
 ## Usage
 
-### Starting the Simulator
+### Web Browser Version (Recommended)
+
+The easiest way to use the simulator is through your web browser:
+
+1. Open `cisco_simulator.html` in any modern web browser (Chrome, Firefox, Safari, Edge)
+2. No installation or dependencies required!
+3. Start typing commands immediately
+
+**Features:**
+- ✅ Works completely offline - no internet required
+- ✅ Terminal-like green-on-black interface
+- ✅ Command history (use arrow keys: ↑ ↓)
+- ✅ Keyboard shortcut: `Ctrl+L` to clear screen
+- ✅ Mobile-friendly responsive design
+
+### Python Terminal Version
+
+For a traditional terminal experience:
 
 ```bash
 python main.py
@@ -150,33 +167,52 @@ The simulator includes the following interfaces:
 
 ## Architecture
 
+### Python Version Components
+
 The simulator consists of four main components:
 
-### 1. `cisco_router.py`
+#### 1. `cisco_router.py`
 Core router class that manages:
 - Router state and configuration
 - Interface management
 - Configuration storage (running-config and startup-config)
 - System information
 
-### 2. `cli_interface.py`
+#### 2. `cli_interface.py`
 Command-line interface implementation:
 - Mode management (User EXEC, Privileged EXEC, Config modes)
 - Command parsing and routing
 - Prompt generation
 - User interaction handling
 
-### 3. `commands.py`
+#### 3. `commands.py`
 Command handlers for:
 - Show commands (version, config, interfaces, routes)
 - Configuration display
 - System information formatting
 
-### 4. `main.py`
+#### 4. `main.py`
 Application entry point:
 - Command-line argument parsing
 - Router initialization
 - CLI startup
+
+### Web Browser Version
+
+**File**: `cisco_simulator.html`
+
+A self-contained HTML file with embedded JavaScript that includes:
+- Complete JavaScript port of all Python classes (`CiscoRouter`, `CLIInterface`, `CommandHandler`)
+- Terminal UI with CSS styling (green-on-black classic terminal look)
+- Event-driven command processing
+- Browser-based command history (arrow keys navigation)
+- Responsive design that works on desktop and mobile devices
+
+**Technical Details:**
+- Zero dependencies - pure HTML/CSS/JavaScript
+- Works offline - no server or internet connection required
+- Approximately 1,000 lines of JavaScript ported from Python
+- Identical functionality to Python version
 
 ## Example Session
 
