@@ -57,6 +57,56 @@ class CLIInterface:
         print("  Simulating Cisco IOS")
         print("=" * 60 + "\n")
 
+    def expand_abbreviations(self, command_line: str) -> str:
+        """Expand common Cisco IOS command abbreviations."""
+        # Common abbreviation mappings (multi-word first for priority)
+        abbreviations = {
+            # Multi-word abbreviations (checked first)
+            'sh run': 'show running-config',
+            'sh start': 'show startup-config',
+            'sh ip int br': 'show ip interface brief',
+            'sh ip int brief': 'show ip interface brief',
+            'sh ip route': 'show ip route',
+            'sh int': 'show interfaces',
+            'sh ver': 'show version',
+            'conf t': 'configure terminal',
+            'config t': 'configure terminal',
+            'copy run start': 'copy running-config startup-config',
+            'no shut': 'no shutdown',
+
+            # Single-word abbreviations
+            'en': 'enable',
+            'sh': 'show',
+            'conf': 'configure',
+            'config': 'configure',
+            'int': 'interface',
+            'desc': 'description',
+            'wr': 'write',
+            'dis': 'disable',
+            'reload': 'reload',
+        }
+
+        command_lower = command_line.lower()
+
+        # Check multi-word abbreviations first (longest match first)
+        for abbrev, full in abbreviations.items():
+            if ' ' in abbrev:  # Multi-word abbreviation
+                if command_lower.startswith(abbrev):
+                    # Replace abbreviation with full form, preserve rest of command
+                    rest = command_line[len(abbrev):].lstrip()
+                    return full + (' ' + rest if rest else '')
+
+        # Check single-word abbreviations
+        parts = command_line.split(None, 1)  # Split into first word and rest
+        if parts:
+            first_word = parts[0].lower()
+            rest = parts[1] if len(parts) > 1 else ''
+
+            if first_word in abbreviations:
+                return abbreviations[first_word] + (' ' + rest if rest else '')
+
+        return command_line
+
     def parse_command(self, command_line: str) -> Tuple[str, List[str]]:
         """Parse command line into command and arguments."""
         try:
@@ -73,6 +123,9 @@ class CLIInterface:
 
         if not command_line:
             return None
+
+        # Expand abbreviations (e.g., "sh run" -> "show running-config")
+        command_line = self.expand_abbreviations(command_line)
 
         # Store in history
         self.command_history.append(command_line)

@@ -5,13 +5,14 @@ A Python-based Cisco IOS router simulator that provides an interactive command-l
 ## Features
 
 - **Authentic Cisco IOS CLI Experience**: Mimics the look and feel of real Cisco IOS
+- **Command Abbreviations**: Supports common IOS shortcuts like `sh run`, `conf t`, `int gi0/0`, etc.
 - **Multiple CLI Modes**: User EXEC, Privileged EXEC, Global Configuration, and Interface Configuration modes
 - **Interface Management**: Configure GigabitEthernet and Serial interfaces
 - **IP Address Configuration**: Assign IP addresses and subnet masks to interfaces
 - **Running and Startup Configuration**: Save and view configurations
 - **Common Show Commands**: `show version`, `show running-config`, `show ip interface brief`, etc.
 - **Interface Status Control**: Enable/disable interfaces with `shutdown` and `no shutdown`
-- **Command History**: Navigate through previously entered commands
+- **Command History**: Navigate through previously entered commands (with optional readline support)
 
 ## Installation
 
@@ -139,6 +140,47 @@ R1# copy running-config startup-config
 - `no shutdown` - Enable the interface
 - `exit` - Return to global configuration mode
 - `end` - Return to privileged EXEC mode
+
+## Command Abbreviations
+
+Just like real Cisco IOS, this simulator supports command abbreviations! You can use shortened versions of commands to work faster.
+
+### Supported Abbreviations
+
+| Abbreviation | Full Command |
+|--------------|--------------|
+| `en` | `enable` |
+| `dis` | `disable` |
+| `sh` | `show` |
+| `sh run` | `show running-config` |
+| `sh start` | `show startup-config` |
+| `sh ver` | `show version` |
+| `sh int` | `show interfaces` |
+| `sh ip int br` | `show ip interface brief` |
+| `sh ip route` | `show ip route` |
+| `conf t` | `configure terminal` |
+| `config t` | `configure terminal` |
+| `int` | `interface` |
+| `desc` | `description` |
+| `no shut` | `no shutdown` |
+| `wr` | `write` |
+| `copy run start` | `copy running-config startup-config` |
+
+### Example with Abbreviations
+
+```
+Router> en
+Router# conf t
+Router(config)# int gi0/0
+Router(config-if)# desc LAN Connection
+Router(config-if)# no shut
+Router(config-if)# exit
+Router(config)# exit
+Router# sh ip int br
+Router# wr
+```
+
+This is much faster than typing out full commands!
 
 ## Available Interfaces
 
