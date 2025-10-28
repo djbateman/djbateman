@@ -4,10 +4,16 @@ Implements the command-line interface with IOS-like behavior.
 """
 
 import sys
-import readline
 import shlex
 from typing import Optional, List, Tuple
 from commands import CommandHandler
+
+# readline is not available on Windows by default
+# It's optional - provides command history and line editing
+try:
+    import readline
+except ImportError:
+    readline = None
 
 
 class Mode:
